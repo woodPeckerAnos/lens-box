@@ -1,10 +1,8 @@
-import { 音符 } from '../model/note.js'
-import { 变奏手法, 轮廓方向 } from '../schema.js'
+import { 变奏手法 } from '../schema.js'
+import { 序列完全相等, 旋律特征编码, 计算节奏比例相似度, 轮廓完全相等 } from './melody-features.js'
 
-/**
- * 旋律片段的变换不变特征快照。
- */
-export type 旋律特征编码 = { 起始半音: number; 音程序列: number[]; 轮廓序列: 轮廓方向[]; 时长比例序列: number[] }
+export { 提取旋律特征编码 } from './melody-features.js'
+export type { 旋律特征编码 } from './melody-features.js'
 
 /**
  * 变奏匹配评估结果。
@@ -19,92 +17,6 @@ export type 变奏匹配配置 = {
   调内模进半音容差?: number | undefined
   节奏缩放判定阈值?: number | undefined
   对齐音程权重?: number | undefined
-}
-
-/**
- * 从音符序列提取相对音程序列、Parsons 轮廓码与归一化时长比例序列。
- */
-export function 提取旋律特征编码(音符列表: readonly 音符[]): 旋律特征编码 {
-  let 首音 = 音符列表[0]
-  if (首音 === undefined) {
-    return { 起始半音: 0, 音程序列: [], 轮廓序列: [], 时长比例序列: [] }
-  }
-
-  let 音程序列: number[] = []
-  let 轮廓序列: 轮廓方向[] = []
-  let 时长列表: number[] = []
-
-  for (let 索引 = 0; 索引 < 音符列表.length; 索引 += 1) {
-    let 当前 = 音符列表[索引]
-    if (当前 === undefined) {
-      continue
-    }
-    let 下一个 = 音符列表[索引 + 1]
-    if (下一个 !== undefined) {
-      let 音程 = 当前.获得音高().到目标音程(下一个.获得音高())
-      音程序列.push(音程)
-      轮廓序列.push(音程 > 0 ? 'U' : 音程 < 0 ? 'D' : 'R')
-      let 间隔 = 当前.到下一音起始间隔(下一个)
-      时长列表.push(间隔 > 1e-6 ? 间隔 : 当前.获得持续时长())
-    } else {
-      时长列表.push(当前.获得持续时长())
-    }
-  }
-
-  let 基准时长 = 1
-  let 正时长 = 时长列表.filter((值) => 值 > 1e-6)
-  if (正时长.length > 0) {
-    let 排序 = [...正时长].sort((甲, 乙) => 甲 - 乙)
-    基准时长 = 排序[0] ?? 1
-  }
-  let 时长比例序列 = 时长列表.map((值) => Number((值 / 基准时长).toFixed(2)))
-
-  return { 起始半音: 首音.获得音高().获得半音编号(), 音程序列, 轮廓序列, 时长比例序列 }
-}
-
-function 序列完全相等(甲: readonly number[], 乙: readonly number[], 容差 = 0): boolean {
-  if (甲.length !== 乙.length) {
-    return false
-  }
-  for (let 索引 = 0; 索引 < 甲.length; 索引 += 1) {
-    let 左值 = 甲[索引]
-    let 右值 = 乙[索引]
-    if (左值 === undefined || 右值 === undefined || Math.abs(左值 - 右值) > 容差) {
-      return false
-    }
-  }
-  return true
-}
-
-function 轮廓完全相等(甲: readonly 轮廓方向[], 乙: readonly 轮廓方向[]): boolean {
-  if (甲.length !== 乙.length) {
-    return false
-  }
-  for (let 索引 = 0; 索引 < 甲.length; 索引 += 1) {
-    if (甲[索引] !== 乙[索引]) {
-      return false
-    }
-  }
-  return true
-}
-
-function 计算节奏比例相似度(甲: readonly number[], 乙: readonly number[]): number {
-  if (甲.length === 0 && 乙.length === 0) {
-    return 1
-  }
-  if (甲.length !== 乙.length) {
-    let 较短 = Math.min(甲.length, 乙.length)
-    let 较长 = Math.max(甲.length, 乙.length)
-    return 较长 === 0 ? 1 : (较短 / 较长) * 0.7
-  }
-  let 累计分 = 0
-  for (let 索引 = 0; 索引 < 甲.length; 索引 += 1) {
-    let 左值 = 甲[索引] ?? 1
-    let 右值 = 乙[索引] ?? 1
-    let 最大值 = Math.max(左值, 右值, 1e-6)
-    累计分 += 1 - Math.abs(左值 - 右值) / 最大值
-  }
-  return 累计分 / 甲.length
 }
 
 /**
@@ -163,11 +75,24 @@ export function 评估变奏关系(
   目标: 旋律特征编码,
   配置?: number | 变奏匹配配置,
 ): 变奏匹配结果 | null {
+  for (let 特征 of [原型, 目标]) {
+    if (Number.isFinite(特征.基准时长) === false || 特征.基准时长 <= 0) {
+      throw new Error('旋律特征的基准时长必须为正有限数字')
+    }
+  }
+  let 最低相似度阈值 = typeof 配置 === 'number' ? 配置 : (配置?.最低相似度阈值 ?? 0.68)
+  if (Number.isFinite(最低相似度阈值) === false || 最低相似度阈值 <= 0 || 最低相似度阈值 > 1) {
+    throw new Error('变奏相似度阈值必须在 (0, 1] 范围内')
+  }
+  let 匹配 = 计算变奏候选(原型, 目标, 配置)
+  return 匹配 !== null && 匹配.相似度 >= 最低相似度阈值 ? 匹配 : null
+}
+
+function 计算变奏候选(原型: 旋律特征编码, 目标: 旋律特征编码, 配置?: number | 变奏匹配配置): 变奏匹配结果 | null {
   if (原型.音程序列.length < 2 || 目标.音程序列.length < 2) {
     return null
   }
 
-  let 最低相似度阈值 = typeof 配置 === 'number' ? 配置 : (配置?.最低相似度阈值 ?? 0.68)
   let 调内模进半音容差 = typeof 配置 === 'number' ? 2 : (配置?.调内模进半音容差 ?? 2)
   let 节奏缩放判定阈值 = typeof 配置 === 'number' ? 0.85 : (配置?.节奏缩放判定阈值 ?? 0.85)
   let 对齐音程权重 = typeof 配置 === 'number' ? 0.75 : (配置?.对齐音程权重 ?? 0.75)
@@ -175,20 +100,25 @@ export function 评估变奏关系(
 
   let 移调半音数 = 目标.起始半音 - 原型.起始半音
   let 节奏相似度 = 计算节奏比例相似度(原型.时长比例序列, 目标.时长比例序列)
+  let 时值比例一致 = 序列完全相等(原型.时长比例序列, 目标.时长比例序列, 1e-6, true)
+  let 时值尺度一致 = Math.abs(原型.基准时长 - 目标.基准时长) <= Math.max(原型.基准时长, 目标.基准时长) * 1e-6
 
   // 1. 原样重复 / 严格移调 / 节奏缩放
   if (序列完全相等(原型.音程序列, 目标.音程序列, 0)) {
-    if (移调半音数 === 0 && 节奏相似度 >= 0.9) {
+    if (时值比例一致 && 时值尺度一致 && 移调半音数 === 0) {
       return { 手法: '原样重复', 相似度: 1, 移调半音数: 0, 说明: '音程与节奏完全一致' }
     }
-    if (节奏相似度 < 节奏缩放判定阈值) {
+    if (时值比例一致 && 时值尺度一致 === false && 节奏相似度 >= 节奏缩放判定阈值) {
       let 综合分 = Number((0.75 + 节奏相似度 * 0.25).toFixed(3))
       return {
         手法: '节奏缩放',
         相似度: 综合分,
         移调半音数,
-        说明: `音程序列完全一致，时值比例发生缩放（移调 ${String(移调半音数)} 半音）`,
+        说明: `音程序列完全一致，时值整体缩放 ${String(Number((目标.基准时长 / 原型.基准时长).toFixed(6)))} 倍（移调 ${String(移调半音数)} 半音）`,
       }
+    }
+    if (时值比例一致 === false || 时值尺度一致 === false) {
+      return null
     }
     return {
       手法: '严格移调',
@@ -228,13 +158,11 @@ export function 评估变奏关系(
   ) {
     let 局部对齐 = 计算局部序列对齐度(原型.音程序列, 目标.音程序列)
     let 综合分 = Number((局部对齐 * 0.65 + 节奏相似度 * 0.35).toFixed(3))
-    if (综合分 >= 最低相似度阈值) {
-      return {
-        手法: '调内模进',
-        相似度: 综合分,
-        移调半音数,
-        说明: `轮廓与节奏型一致，按调内音阶微调移位 ${String(移调半音数)} 半音`,
-      }
+    return {
+      手法: '调内模进',
+      相似度: 综合分,
+      移调半音数,
+      说明: `轮廓与节奏型一致，按调内音阶微调移位 ${String(移调半音数)} 半音`,
     }
   }
 
@@ -245,15 +173,11 @@ export function 评估变奏关系(
 
   let 对齐分 = 计算局部序列对齐度(原型.音程序列, 目标.音程序列)
   let 综合相似度 = Number((对齐分 * 对齐音程权重 + 节奏相似度 * 对齐节奏权重).toFixed(3))
-  if (综合相似度 >= 最低相似度阈值) {
-    let 手法: 变奏手法 = 目标.音程序列.length > 原型.音程序列.length ? '加花变奏' : '简缩变奏'
-    return {
-      手法,
-      相似度: 综合相似度,
-      移调半音数,
-      说明: 手法 === '加花变奏' ? '保留核心音程骨架并插入过渡/装饰音' : '保留核心轮廓并删减了部分过渡音',
-    }
+  let 手法: 变奏手法 = 目标.音程序列.length > 原型.音程序列.length ? '加花变奏' : '简缩变奏'
+  return {
+    手法,
+    相似度: 综合相似度,
+    移调半音数,
+    说明: 手法 === '加花变奏' ? '保留核心音程骨架并插入过渡/装饰音' : '保留核心轮廓并删减了部分过渡音',
   }
-
-  return null
 }

@@ -1,12 +1,14 @@
 import { 切分文章片段, 提取中文实词与总词数, 默认中文停用词集合 } from './lexical/text-tools.js'
 import { 概念共现图 } from './model/cooccurrence-graph.js'
 import { 语义篇章 } from './model/discourse.js'
+import { 语义契合度结果, 语义生成目标 } from './model/generation-target.js'
 import { 语义单元 } from './model/unit.js'
 import { 语义剖析输入, 语义剖析输入Schema, 语义单元快照 } from './schema.js'
 
 export * from './corpus-stats.js'
 export * from './model/cooccurrence-graph.js'
 export * from './model/discourse.js'
+export * from './model/generation-target.js'
 export * from './model/unit.js'
 export * from './schema.js'
 
@@ -138,5 +140,13 @@ export class 语义学透镜 {
       记录时间戳: Date.now(),
       来源标签: 输入.来源标签 ?? null,
     })
+  }
+
+  /**
+   * 纯本地评估候选生成文本与语义目标设定的契合度。
+   */
+  public 同步评估文本(文本: string, 目标: 语义生成目标): 语义契合度结果 {
+    let 篇章 = this.同步剖析文章({ 文本 })
+    return 目标.评估篇章(篇章)
   }
 }

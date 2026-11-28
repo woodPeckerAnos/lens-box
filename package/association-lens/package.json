@@ -1,0 +1,26 @@
+{
+  "name": "@lsby/lens-box-association-lens",
+  "version": "0.1.0",
+  "private": true,
+  "description": "以模型判断与原文证据定位观察文本联想关系的透镜",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "demo": "tsx demo/basic-demo.ts",
+    "demo:model": "tsx demo/model-demo.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@lsby/ai-agent": "^0.1.3",
+    "openai": "^4.104.0",
+    "zod": "^3.24.2"
+  }
+}
