@@ -1,7 +1,6 @@
 {
   "name": "@lsby/lens-box-semantics-lens",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.0.1",
   "description": "基于分布语义学与概念共现网络的非大模型文章语义剖析透镜",
   "type": "module",
   "exports": {
@@ -12,6 +11,10 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "demo": "tsx demo/basic-demo.ts",
@@ -24,5 +27,8 @@
     "graphology-communities-louvain": "^2.0.2",
     "stopwords-zh": "^0.4.0",
     "zod": "^3.24.2"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

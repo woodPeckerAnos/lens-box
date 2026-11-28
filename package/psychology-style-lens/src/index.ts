@@ -1,8 +1,10 @@
 import { 智能体, type 智能体回调 } from '@lsby/ai-agent'
 import type OpenAI from 'openai'
+import { 心理学契合度结果, 心理学生成目标 } from './model/generation-target.js'
 import { 心理学文风样本 } from './model/sample.js'
 import { 心理学观察结果Schema, 心理学观察输入, 心理学观察输入Schema } from './schema.js'
 
+export * from './model/generation-target.js'
 export * from './model/sample.js'
 export * from './schema.js'
 
@@ -110,5 +112,17 @@ export class 心理学文风透镜 {
       输入.上下文提示 !== undefined && 输入.上下文提示 !== null ? `\n补充上下文：${输入.上下文提示}\n` : ''
 
     return [上下文段落, '待分析例句：', `"""\n${输入.文本}\n"""`].filter((段落) => 段落.length > 0).join('\n')
+  }
+
+  /**
+   * 评估候选生成文本与心理学目标设定的契合度。
+   */
+  public async 评估生成文本(
+    文本: string,
+    目标: 心理学生成目标,
+    执行选项?: 心理学观察执行选项,
+  ): Promise<心理学契合度结果> {
+    let 样本 = await this.观察({ 文本 }, 执行选项)
+    return 目标.评估样本(样本)
   }
 }
